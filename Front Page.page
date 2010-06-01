@@ -1,12 +1,26 @@
-# Welcome to Gitit!
+# GLFW-Elerea
 
-This is the front page of your new gitit wiki.  You can edit this
-page by clicking on the "edit" tab at the top of the screen.
-For instructions on how to make a link to another wiki page, see [the
-Help page](Help#wiki-links). To create a new wiki page, just create a
-link to it and follow the link.
+Quickly connect Elerea reactive networs to GLFW and *start drawing*.
 
-Help is always available through the "Help" link in the sidebar.
-More details on installing and configurating gitit are available
-in the [Gitit User's Guide]().
+~~~ {.haskell}
+withGLFWExt
+  "Good Stuff!"
+  (myCreateSignal :: SignalCreator)
+  defaultConfig {
 
+          resizeCallback = \size@(Size w h) -> do
+              viewport $= (Position 0 0, size)
+              matrixMode $= Projection
+              loadIdentity
+              perspective 45 (fromIntegral w / fromIntegral h) 0.1 100
+              matrixMode $= Modelview 0
+
+          extraInit = do
+              clearColor $= Color4 0 0 0 0
+              clearDepth $= 1
+              depthFunc $= Just Less
+              lighting $= Enabled
+              light (Light 0) $= Enabled
+              shadeModel $= Flat
+      }
+~~~

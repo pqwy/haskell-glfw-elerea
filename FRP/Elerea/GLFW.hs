@@ -1,5 +1,5 @@
 {-|
-A quick and simple way to run "Elerea" networks with "GLFW" window and even handling.
+A quick and simple way to run "Elerea" networks with "GLFW" window and event handling.
 
 e.g.
 
