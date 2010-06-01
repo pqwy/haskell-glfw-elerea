@@ -3,9 +3,9 @@
 Quickly connect Elerea reactive networs to GLFW and **start drawing**.
 
 ~~~ {.haskell}
-withGLFWExt
+runGLFWExt
   "Good Stuff!"
-  (myCreateSignal :: SignalCreator)
+  (myCreateSignal :: GLFWSignal)
   defaultConfig {
 
           postOpenInit = do

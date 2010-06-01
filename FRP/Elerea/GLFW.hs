@@ -3,9 +3,9 @@ A quick and simple way to run Elerea networks with GLFW window and event handlin
 
 e.g.
 
-> withGLFWExt
+> runGLFWExt
 >   "Good Stuff!"
->   (myCreateSignal :: SignalCreator)
+>   (myCreateSignal :: GLFWSignal)
 >   defaultConfig {
 >
 >           postOpenInit = do
@@ -24,13 +24,13 @@ e.g.
 
 module FRP.Elerea.GLFW (
 
-    SignalCreator,
+    GLFWSignal,
 
     -- * Configuring
-    GlfwAdapterConfig (..), defaultConfig
+    GLFWConfig (..), defaultConfig
 
     -- * Running
-    , withGLFWExt, withGLFW
+    , runGLFWExt, runGLFW
 
     ) where
 
@@ -49,16 +49,18 @@ import System.Exit
 
 -- | The type of Elerea callbacks that receive event sources and create the network.
 
-type SignalCreator =
-       Signal [Key]                     -- ^ keyboard state
-    -> Signal Position                  -- ^ current mouse position
-    -> Signal [MouseButton]             -- ^ mouse button state
-    -> Signal Int                       -- ^ current scroll-wheel value
+type GLFWSignal =
+       Signal [Key]
+       -- ^ keyboard state
+    -> (Signal Position, Signal [MouseButton], Signal Int)
+       -- ^ mouse position, button state and scroll-wheel value
+    -> Signal Size
+       -- ^ window size
     -> SignalMonad (Signal (IO ()))
 
 -- | Extra knobs
 
-data GlfwAdapterConfig =
+data GLFWConfig =
 
     GAC { winSize :: Maybe Size
           -- ^ window size, 'FullScreen' if Nothing
@@ -70,7 +72,7 @@ data GlfwAdapterConfig =
           -- ^ initialization to perform /before/ opening the window, after 'initialize'
 
         , postOpenInit :: IO ()
-          -- ^ initialization to perform /after/ opening the window (typically, the usual initGL stuff)
+          -- ^ initialization to perform /after/ opening the window (typically, the usual initGL-type stuff)
 
         , extraCleanup :: IO ()
           -- ^ called just before 'terminate'
@@ -83,7 +85,7 @@ data GlfwAdapterConfig =
 -- (8,8,8) rbg bits \/ 8 alpha bits \/ 24 depth bits for 'displayBits'.
 -- 'preOpenInit', 'postOpenInit', 'resizeCallback' and 'extraCleanup' do nothing.
 
-defaultConfig :: GlfwAdapterConfig
+defaultConfig :: GLFWConfig
 defaultConfig =
 
     GAC { winSize = Just (Size 0 0)
@@ -103,15 +105,15 @@ defaultConfig =
 
 -- | Just go with the default config.
 
-withGLFW :: String -> SignalCreator -> IO ()
-withGLFW t s = withGLFWExt t s defaultConfig
+runGLFW :: String -> GLFWSignal -> IO ()
+runGLFW t s = runGLFWExt t s defaultConfig
 
 -- | Initialize GLFW, open a window, hook up external signal sources to GLFW keyboard/mouse,
 -- maybe perform custom inits, create the signal and /spin it in a tight loop/.
 -- Terminates on ESC or when the window is closed.
 
-withGLFWExt :: String -> SignalCreator -> GlfwAdapterConfig -> IO ()
-withGLFWExt title sgn cfg = do
+runGLFWExt :: String -> GLFWSignal -> GLFWConfig -> IO ()
+runGLFWExt title sgn cfg = do
 
     initialize
 
@@ -123,7 +125,6 @@ withGLFWExt title sgn cfg = do
     openWindow sz (displayBits cfg) fs
     windowTitle $= title
 
-    windowSizeCallback $= resizeCallback cfg
     windowCloseCallback $= ( endit >> exitSuccess )
 
     postOpenInit cfg
@@ -142,8 +143,13 @@ withGLFWExt title sgn cfg = do
     let mousePosSnapshot = get mousePos >>= mouseSink
         mouseWheelSnapshot = get mouseWheel >>= mwheelSink
 
+    (winSize, winSizeSink) <- external (Size 0 0)
 
-    net <- createSignal (sgn keys mouse mbutt mwheel)
+
+    windowSizeCallback $= \s -> winSizeSink s >> resizeCallback cfg s
+
+
+    net <- createSignal $ sgn keys (mouse, mbutt, mwheel) winSize
     drive net (mousePosSnapshot >> mouseWheelSnapshot)
 
     endit
