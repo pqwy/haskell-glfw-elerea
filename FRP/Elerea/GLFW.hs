@@ -39,7 +39,7 @@ import Graphics.UI.GLFW
 
 import FRP.Elerea
 
-import Control.Monad ( join, when )
+import Control.Monad ( join, unless )
 import Data.List ( delete )
 
 import Data.IORef
@@ -79,11 +79,20 @@ data GLFWConfig =
 
         , resizeCallback :: WindowSizeCallback
           -- ^ the raw 'WindowSizeCallback'
+        
+        , timeStep :: Step
+          -- ^ timing regimen
         }
+
+
+data Step = Sliding     -- ^ feed delta time to the network, once each iteration
+          | Fixed DTime -- ^ increment the net in fixed steps
+
 
 -- | Default 'winSize'.
 -- (8,8,8) rbg bits \/ 8 alpha bits \/ 24 depth bits for 'displayBits'.
 -- 'preOpenInit', 'postOpenInit', 'resizeCallback' and 'extraCleanup' do nothing.
+-- 'Sliding' timing.
 
 defaultConfig :: GLFWConfig
 defaultConfig =
@@ -101,6 +110,8 @@ defaultConfig =
         , resizeCallback = \_ -> return ()
 
         , extraCleanup = return ()
+
+        , timeStep = Sliding
     }
 
 -- | Just go with the default config.
@@ -150,25 +161,38 @@ runGLFWExt title sgn cfg = do
 
 
     net <- createSignal $ sgn keys (mouse, mbutt, mwheel) winSize
-    drive net (mousePosSnapshot >> mouseWheelSnapshot)
+    drive net (timeStep cfg) (mousePosSnapshot >> mouseWheelSnapshot)
 
     endit
 
   where
     endit = closeWindow >> extraCleanup cfg >> terminate
 
-drive :: Signal (IO ()) -> IO () -> IO ()
-drive sgn preInit = do
+
+drive :: Signal (IO ()) -> Step -> IO () -> IO ()
+drive sgn tstep preInit = do
 
     k <- getKey ESC
-    when (not $ k == Press) $ do
+    unless (k == Press) $ do
 
         preInit
         t <- get time
         time $= 0
 
-        join (superstep sgn t)
-        drive sgn preInit
+        join $ case tstep of
+                Sliding -> superstep sgn t
+                Fixed d -> do
+                    (act, t') <- stepper t (return ())
+                    get time >>= (time $=) . (+ t')
+                    return act
+
+        drive sgn tstep preInit
+
+  where
+    stepper timeAcc act | timeAcc >= dt = superstep sgn dt >>= stepper (timeAcc - dt)
+                        | otherwise     = return (act, timeAcc)
+    Fixed dt = tstep
+
 
 mkPressReleaseMonitor :: (Eq a) => IO (([a] -> IO ()) -> a -> KeyButtonState -> IO ())
 mkPressReleaseMonitor = do
