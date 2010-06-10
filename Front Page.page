@@ -5,7 +5,7 @@ Quickly connect Elerea reactive networs to GLFW and **start drawing**.
 ~~~ {.haskell}
 runGLFWExt
   "Good Stuff!"
-  (myCreateSignal :: GLFWSignal)
+  (myCreateSignal :: GLFWSignal ())
   defaultConfig {
 
           postOpenInit = do
@@ -13,11 +13,15 @@ runGLFWExt
               clearDepth $= 1
               depthFunc $= Just Less
 
+              return ()
+
           resizeCallback = \size@(Size w h) -> do
               viewport $= (Position 0 0, size)
+
               matrixMode $= Projection
               loadIdentity
               perspective 45 (fromIntegral w / fromIntegral h) 0.1 100
               matrixMode $= Modelview 0
+
       }
 ~~~

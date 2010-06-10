@@ -5,13 +5,14 @@ e.g.
 
 > runGLFWExt
 >   "Good Stuff!"
->   (myCreateSignal :: GLFWSignal)
+>   (myCreateSignal :: GLFWSignal ())
 >   defaultConfig {
 >
 >           postOpenInit = do
 >               clearColor $= Color4 0 0 0 0
 >               clearDepth $= 1
 >               depthFunc $= Just Less
+>               return ()
 >
 >           resizeCallback = \size@(Size w h) -> do
 >               viewport $= (Position 0 0, size)
@@ -47,10 +48,13 @@ import Data.IORef
 import System.Exit
 
 
--- | The type of Elerea callbacks that receive event sources and create the network.
+-- | The type of Elerea callbacks that receive initialization results and event
+-- sources and create the network.
 
-type GLFWSignal =
-       Signal [Key]
+type GLFWSignal a =
+       a
+       -- ^ the 'postOpenInit' result
+    -> Signal [Key]
        -- ^ keyboard state
     -> (Signal Position, Signal [MouseButton], Signal Int)
        -- ^ mouse position, button state and scroll-wheel value
@@ -58,9 +62,14 @@ type GLFWSignal =
        -- ^ window size
     -> SignalMonad (Signal (IO ()))
 
+
+data Step = Sliding     -- ^ feed delta time to the network, once each iteration
+          | Fixed DTime -- ^ increment the net in fixed steps
+
+
 -- | Extra knobs
 
-data GLFWConfig =
+data GLFWConfig a =
 
     GAC { winSize :: Maybe Size
           -- ^ window size, 'FullScreen' if Nothing
@@ -71,8 +80,9 @@ data GLFWConfig =
         , preOpenInit :: IO ()
           -- ^ initialization to perform /before/ opening the window, after 'initialize'
 
-        , postOpenInit :: IO ()
-          -- ^ initialization to perform /after/ opening the window (typically, the usual initGL-type stuff)
+        , postOpenInit :: IO a
+          -- ^ initialization to perform /after/ opening the window, hence, with full OpenGL
+          -- context (typically, the usual initGL-type stuff + rendering list construction)
 
         , extraCleanup :: IO ()
           -- ^ called just before 'terminate'
@@ -85,16 +95,12 @@ data GLFWConfig =
         }
 
 
-data Step = Sliding     -- ^ feed delta time to the network, once each iteration
-          | Fixed DTime -- ^ increment the net in fixed steps
-
-
 -- | Default 'winSize'.
 -- (8,8,8) rbg bits \/ 8 alpha bits \/ 24 depth bits for 'displayBits'.
 -- 'preOpenInit', 'postOpenInit', 'resizeCallback' and 'extraCleanup' do nothing.
 -- 'Sliding' timing.
 
-defaultConfig :: GLFWConfig
+defaultConfig :: GLFWConfig ()
 defaultConfig =
 
     GAC { winSize = Just (Size 0 0)
@@ -116,14 +122,14 @@ defaultConfig =
 
 -- | Just go with the default config.
 
-runGLFW :: String -> GLFWSignal -> IO ()
+runGLFW :: String -> GLFWSignal () -> IO ()
 runGLFW t s = runGLFWExt t s defaultConfig
 
 -- | Initialize GLFW, open a window, hook up external signal sources to GLFW keyboard/mouse,
 -- maybe perform custom inits, create the signal and /spin it in a tight loop/.
 -- Terminates on ESC or when the window is closed.
 
-runGLFWExt :: String -> GLFWSignal -> GLFWConfig -> IO ()
+runGLFWExt :: String -> GLFWSignal a -> GLFWConfig a -> IO ()
 runGLFWExt title sgn cfg = do
 
     initialize
@@ -138,7 +144,7 @@ runGLFWExt title sgn cfg = do
 
     windowCloseCallback $= ( endit >> exitSuccess )
 
-    postOpenInit cfg
+    a <- postOpenInit cfg
 
 
     (keys, keySink) <- external []
@@ -160,7 +166,8 @@ runGLFWExt title sgn cfg = do
     windowSizeCallback $= \s -> winSizeSink s >> resizeCallback cfg s
 
 
-    net <- createSignal $ sgn keys (mouse, mbutt, mwheel) winSize
+    net <- createSignal $
+            sgn a keys (mouse, mbutt, mwheel) winSize
     drive net (timeStep cfg) (mousePosSnapshot >> mouseWheelSnapshot)
 
     endit
