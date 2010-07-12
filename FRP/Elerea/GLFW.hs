@@ -28,7 +28,7 @@ module FRP.Elerea.GLFW (
     GLFWSignal,
 
     -- * Configuring
-    GLFWConfig (..), defaultConfig
+    GLFWConfig (..), Step (..), defaultConfig
 
     -- * Running
     , runGLFWExt, runGLFW
