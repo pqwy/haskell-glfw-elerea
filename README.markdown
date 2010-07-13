@@ -1,4 +1,6 @@
-# GLFW-Elerea #
+
+GLFW-Elerea
+-----------
 
 Quickly connect [Elerea][elerea] reactive networks to [GLFW][glfw] and start rendering.
 
